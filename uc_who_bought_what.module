@@ -35,8 +35,6 @@ function uc_who_bought_what_report() {
 
   $csv_rows = array();
   
-  //var_dump($product_list);
-  
   $output = drupal_get_form('uc_who_bought_what_form');
   
   if ($product_id) {
@@ -45,7 +43,6 @@ function uc_who_bought_what_report() {
     $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . '</h3>';
     
     $header = array(
-      
 			array('data' => t('Qty'), 'field' => db_prefix_tables('{uc_order_products}.qty')),
 			array('data' => t('LName'), 'field' => db_prefix_tables('{uc_orders}.billing_last_name')),
 			array('data' => t('FName'), 'field' => db_prefix_tables('{uc_orders}.billing_first_name')),
@@ -67,17 +64,18 @@ function uc_who_bought_what_report() {
 		$sqsel .=   db_prefix_tables('{uc_order_products}.data') .  " AS OrderData ";	// this is to collect the raw attribute data and also not to have a comma at the end
 
 	  $sql = 'SELECT  ' . $sqsel .                   
-                  ' FROM ' . db_prefix_tables('{uc_orders}') .
-                  ' JOIN ' . db_prefix_tables('{uc_order_products}') . 
-									' ON ' . db_prefix_tables('{uc_order_products}.order_id') . ' = ' . db_prefix_tables('{uc_orders}.order_id') . 
-									' AND ' . db_prefix_tables('{uc_order_products}.nid') . ' = ' . $product_id . 
-                  " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled'";
+       ' FROM ' . db_prefix_tables('{uc_orders}') .
+       ' JOIN ' . db_prefix_tables('{uc_order_products}') . 
+			 ' ON ' . db_prefix_tables('{uc_order_products}.order_id') . ' = ' . db_prefix_tables('{uc_orders}.order_id') . 
+			 ' AND ' . db_prefix_tables('{uc_order_products}.nid') . ' = ' . $product_id . 
+       " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled'";
     
 
     $customers = pager_query($sql . tablesort_sql($header), $page_size, 0, $sql_count);
     $email_addresses = array();  // we like to collect the addresses.
 		
 		//What about the attributes?  Not everyone uses attributes.  Better test first.
+				
 		if (module_exists('uc_attribute')){
 		
       //Collect and unserialize the attributes.  First, the names
@@ -87,7 +85,7 @@ function uc_who_bought_what_report() {
 		
 			 while ($attrow = db_fetch_array($attresults)) {
         $header[]=array('data'=>t($attrow['label']));
-  			$attrlist[] = array('data'=>t($attrow['name']));
+  			$attrlist[] = array('data'=>t($attrow['label']));
    		 }
 		} //end if module exists
 		
@@ -111,18 +109,18 @@ function uc_who_bought_what_report() {
 			$temparray[]=  $customer['HowPay'];
 			$temparray[]=  l($customer['Status'],'admin/store/orders/' . $customer['ID']);
 		  $temparray[]=  l("#" . $customer['ID'],'admin/store/orders/' . $customer['ID']);
-  
+      
+			$email_addresses[] = $customer['Email'];  //add to the list
+			  
 			$mydata=unserialize($customer['OrderData']);
-	
-
-      $email_addresses[] = $customer['Email'];  //add to the list
-
-       
-				//$temparray[]= array('data' => $data_cell);
       if (!is_null($attrlist)){
-			  foreach ($attrlist as $myattrib) {
-				
-			    $temparray[] = $mydata['attributes'][$myattrib['data']];
+			  foreach ($attrlist as $myattrib) { 
+				 $thisdatum = $mydata['attributes'][$myattrib['data']];
+				 if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
+				   $temparray[] = implode(' | ', $thisdatum);
+				  } else {$temparray[] = $thisdatum;}
+				 
+         
 			  }
 			}
 			
@@ -130,15 +128,13 @@ function uc_who_bought_what_report() {
 			
 			$temp_csv = array();
 			foreach ($temparray as $new_csv_val) {
-			
-			    $temp_csv[] = strip_tags($new_csv_val);
-			  }
+			  $temp_csv[] = strip_tags($new_csv_val);
+			}
 			$csv_rows[]=$temp_csv;
-			;
       
     }  
     if (empty($rows)) {
-      $rows[] = array(array('data' => t('No customers found for this product'), 'colspan' => count($header)));
+      $rows[] = array(array('data' => t('No customers found for this item'), 'colspan' => count($header)));
     }
    $csv_data = uc_reports_store_csv('who_bought_' . convert_to_filename($node->title), $csv_rows);
   
@@ -165,12 +161,6 @@ function uc_who_bought_what_report() {
 
 
 function uc_who_bought_what_form($form_state) {
-  /*
-  $types = db_query("SELECT DISTINCT(pcid), name FROM {uc_product_classes}");
-  while ($type = db_fetch_object($types)) {
-    $product_types[] = "'". $type->pcid ."'";
-  }
-  */
   
   $products = db_query("SELECT DISTINCT({uc_products}.nid) AS nid, {node}.title AS title, {uc_product_classes}.name AS type 
     FROM {uc_products}
@@ -179,7 +169,7 @@ function uc_who_bought_what_form($form_state) {
     WHERE {node}.status = 1
     ORDER BY {uc_product_classes}.name, {node}.title");
 
-  $product_list[0] = t('Select a product...');
+  $product_list[0] = t('Select an item...');
   
   
   while ($product = db_fetch_array($products)) {

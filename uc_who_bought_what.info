@@ -1,6 +1,7 @@
-; $Id$ 
+; $Id$
 name = Who Bought What
 description = A shows a list of users who purchased a selected product
 core = 6.x
 dependencies[] = uc_reports
 package = "Ubercart - extra"
+
