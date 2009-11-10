@@ -1,5 +1,5 @@
 <?php
-// $Id$
+// $Id:
 
 
 /**
@@ -27,18 +27,23 @@
  * Display the purchaser list report
  */
 function uc_who_bought_what_report() {
-  
   $product_id = variable_get('product_select', 0);
+
   
   $page = (!is_null($_GET['page'])) ? intval($_GET['page']) : 0;
-  $page_size = (!is_null($_GET['nopage'])) ? UC_REPORTS_MAX_RECORDS : variable_get('uc_reports_table_size', 200);
+  $page_size = (!is_null($_GET['nopage'])) ? UC_REPORTS_MAX_RECORDS : variable_get('uc_reports_table_size', 500);
 
   $csv_rows = array();
   
   $output = drupal_get_form('uc_who_bought_what_form');
   
   if ($product_id) {
-    $node = node_load($product_id);
+	    $node = node_load($product_id);
+			global $user;
+	    if ($user->uid != 1 && $node->uid != $user->uid) {
+			  drupal_set_message("Please select an item");
+			  return $output;
+			}
   
     $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . '</h3>';
     
@@ -51,7 +56,9 @@ function uc_who_bought_what_report() {
 			array('data' => t('Price'), 'field' => db_prefix_tables('{uc_order_products}.price')),
 			array('data' => t('HowPay'), 'field' => db_prefix_tables('{uc_orders}.payment_method')),
 			array('data' => t('Status'), 'field' => db_prefix_tables('{uc_orders}.order_status')),
-			array('data' => t('ID'), 'field' => db_prefix_tables('{uc_orders}.order_id')),					
+			array('data' => t('Ord'), 'field' => db_prefix_tables('{uc_orders}.order_id')),	
+			array('data' => t('Itm'), 'field' => db_prefix_tables('{uc_order_products}.order_product_id')),
+			 				
     );
 
 		$sqsel = "  "; //now build the sql query
@@ -63,12 +70,11 @@ function uc_who_bought_what_report() {
 		$sqsel .=   db_prefix_tables('{uc_orders}.uid') .  " AS uid ,";  
 		$sqsel .=   db_prefix_tables('{uc_order_products}.data') .  " AS OrderData ";	// this is to collect the raw attribute data and also not to have a comma at the end
 
-	  $sql = 'SELECT  ' . $sqsel .                   
-       ' FROM ' . db_prefix_tables('{uc_orders}') .
-       ' JOIN ' . db_prefix_tables('{uc_order_products}') . 
-			 ' ON ' . db_prefix_tables('{uc_order_products}.order_id') . ' = ' . db_prefix_tables('{uc_orders}.order_id') . 
-			 ' AND ' . db_prefix_tables('{uc_order_products}.nid') . ' = ' . $product_id . 
-       " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled'";
+	  $sql = "SELECT $sqsel FROM {uc_orders}" .
+       " JOIN {uc_order_products} " . 
+			 " ON {uc_order_products}.order_id = {uc_orders}.order_id" . 
+			 " AND {uc_order_products}.nid = $product_id" . 
+       " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' ";
     
 
     $customers = pager_query($sql . tablesort_sql($header), $page_size, 0, $sql_count);
@@ -107,8 +113,9 @@ function uc_who_bought_what_report() {
 			$temparray[]=  $customer['Phone'];
 			$temparray[]=  number_format($customer['Price'],2);
 			$temparray[]=  $customer['HowPay'];
-			$temparray[]=  l($customer['Status'],'admin/store/orders/' . $customer['ID']);
-		  $temparray[]=  l("#" . $customer['ID'],'admin/store/orders/' . $customer['ID']);
+			$temparray[]=  l($customer['Status'],'admin/store/orders/' . $customer['Ord']);
+		  $temparray[]=  l($customer['Ord'],'admin/store/orders/' . $customer['Ord']);
+			$temparray[]=  l($customer['Itm'],'admin/store/orders/' . $customer['Ord']);
       
 			$email_addresses[] = $customer['Email'];  //add to the list
 			  
@@ -118,9 +125,7 @@ function uc_who_bought_what_report() {
 				 $thisdatum = $mydata['attributes'][$myattrib['data']];
 				 if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
 				   $temparray[] = implode(' | ', $thisdatum);
-				  } else {$temparray[] = $thisdatum;}
-				 
-         
+				  } else {$temparray[] = $thisdatum;}   
 			  }
 			}
 			
@@ -162,11 +167,16 @@ function uc_who_bought_what_report() {
 
 function uc_who_bought_what_form($form_state) {
   
+	global $user;
+	if ($user->uid != 1){
+	  $anduidlimit = " WHERE {node}.uid = $user->uid ";
+	}
+	
   $products = db_query("SELECT DISTINCT({uc_products}.nid) AS nid, {node}.title AS title, {uc_product_classes}.name AS type 
     FROM {uc_products}
     INNER JOIN {node} ON {uc_products}.nid = {node}.nid
     LEFT JOIN {uc_product_classes} ON {uc_product_classes}.pcid = {node}.type
-    WHERE {node}.status = 1
+    $anduidlimit
     ORDER BY {uc_product_classes}.name, {node}.title");
 
   $product_list[0] = t('Select an item...');
@@ -184,12 +194,9 @@ function uc_who_bought_what_form($form_state) {
   
   $form['product_select'] = array(
     '#type' => 'select',
-    '#title' => t('Choose a product'),
+    '#title' => t('Choose an item'),
     '#default_value' => variable_get('product_select',0),
     '#options' => $product_list,
-    
-    
-    '#description' => t('Choose a product.'),
   );
   $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
   
@@ -207,8 +214,8 @@ function uc_who_bought_what_form_validate($form_id, $form_values) {
 
 
 function uc_who_bought_what_form_submit($form, $form_values) {
-  //drupal_set_message(t('Your form has been saved.'));
-  //drupal_set_message(t($form_values['values']['product_select']));
+ 
+  //drupal_set_message($_GET['year'] . t($form_values['values']['product_select']));
   //drupal_set_message(t(print_r($form_values, true)));
   variable_set('product_select', $form_values['values']['product_select']);
 } // function uc_who_bought_what_form_submit
@@ -225,7 +232,7 @@ function uc_who_bought_what_form_submit($form, $form_values) {
 * @return array An array of valid permissions for the uc_who_bought_what module
 */
 function uc_who_bought_what_perm() {
-  return array('view uc_who_bought_what');
+  return array('view uc_who_bought_what', 'view all who bought what');
 } // function uc_who_bought_what_perm
 
 
