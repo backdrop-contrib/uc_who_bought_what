@@ -27,23 +27,33 @@
  * Display the purchaser list report
  */
 function uc_who_bought_what_report() {
+  
   $product_id = variable_get('product_select', 0);
-
   
   $page = (!is_null($_GET['page'])) ? intval($_GET['page']) : 0;
-  $page_size = (!is_null($_GET['nopage'])) ? UC_REPORTS_MAX_RECORDS : variable_get('uc_reports_table_size', 500);
+  $page_size = (!is_null($_GET['nopage'])) ? UC_REPORTS_MAX_RECORDS : variable_get('uc_reports_table_size', 1000);
 
   $csv_rows = array();
   
   $output = drupal_get_form('uc_who_bought_what_form');
   
   if ($product_id) {
-	    $node = node_load($product_id);
-			global $user;
-	    if ($user->uid != 1 && $node->uid != $user->uid) {
-			  drupal_set_message("Please select an item");
-			  return $output;
-			}
+    $node = node_load($product_id);
+		
+		$checkout = FALSE;
+		
+		//What about node checkout?  Better test first.
+				
+		if (module_exists('uc_node_checkout')){
+		  //First, see if this node has a node checkout
+		  $sql = "SELECT node_type, product_nid from {uc_node_checkout_types} WHERE product_nid = $product_id";
+			$checknode = db_fetch_array(db_query($sql));
+			if($checknode) {
+			  drupal_set_message("Also Displaying linked nodes, experimentally.  Not yet reliable.");
+				$checkout = TRUE;
+				};
+   		} //end if node checkout module 
+		
   
     $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . '</h3>';
     
@@ -56,9 +66,7 @@ function uc_who_bought_what_report() {
 			array('data' => t('Price'), 'field' => db_prefix_tables('{uc_order_products}.price')),
 			array('data' => t('HowPay'), 'field' => db_prefix_tables('{uc_orders}.payment_method')),
 			array('data' => t('Status'), 'field' => db_prefix_tables('{uc_orders}.order_status')),
-			array('data' => t('Ord'), 'field' => db_prefix_tables('{uc_orders}.order_id')),	
-			array('data' => t('Itm'), 'field' => db_prefix_tables('{uc_order_products}.order_product_id')),
-			 				
+			array('data' => t('ID'), 'field' => db_prefix_tables('{uc_orders}.order_id')),					
     );
 
 		$sqsel = "  "; //now build the sql query
@@ -67,18 +75,29 @@ function uc_who_bought_what_report() {
 				$sqsel .= $hval['field'] . " AS " . $hval['data'];
 				$sqsel .= ", ";
 				}			
-		$sqsel .=   db_prefix_tables('{uc_orders}.uid') .  " AS uid ,";  
+		$sqsel .=   "{uc_orders}.uid" .  " AS uid ,";  
+		
+   if($checkout) $sqsel .=   db_prefix_tables('{uc_node_checkout_order_products}.nid') .  " AS checkOutNode ,"; // if it exists
+		
 		$sqsel .=   db_prefix_tables('{uc_order_products}.data') .  " AS OrderData ";	// this is to collect the raw attribute data and also not to have a comma at the end
 
-	  $sql = "SELECT $sqsel FROM {uc_orders}" .
-       " JOIN {uc_order_products} " . 
-			 " ON {uc_order_products}.order_id = {uc_orders}.order_id" . 
-			 " AND {uc_order_products}.nid = $product_id" . 
-       " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' ";
+	  $sql = 'SELECT  ' . $sqsel .                   
+       ' FROM ' . db_prefix_tables('{uc_orders}') .
+       ' JOIN ' . db_prefix_tables('{uc_order_products}') . 
+			 ' ON ' . db_prefix_tables('{uc_order_products}.order_id') . ' = ' . db_prefix_tables('{uc_orders}.order_id') . 
+			 ' AND ' . db_prefix_tables('{uc_order_products}.nid') . ' = ' . $product_id ; 
+			 
+       if($checkout) $sql .=  ' LEFT JOIN ' . db_prefix_tables('{uc_node_checkout_order_products}') ; // if it exists
+		   if($checkout) $sql .=  ' ON ' . db_prefix_tables('{uc_node_checkout_order_products}.order_product_id') . ' = ' . db_prefix_tables('{uc_order_products}.order_product_id') ;
+			 			 
+       $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled'";
     
 
     $customers = pager_query($sql . tablesort_sql($header), $page_size, 0, $sql_count);
     $email_addresses = array();  // we like to collect the addresses.
+		
+		//What about node checkout?  Better test first.
+		if($checkout) $header[]=array('data'=>$checknode['node_type']);  // we did the search earlier	
 		
 		//What about the attributes?  Not everyone uses attributes.  Better test first.
 				
@@ -92,15 +111,16 @@ function uc_who_bought_what_report() {
 			 while ($attrow = db_fetch_array($attresults)) {
         $header[]=array('data'=>t($attrow['label']));
   			$attrlist[] = array('data'=>t($attrow['label']));
+			
    		 }
-		} //end if module exists
+		} //end if attribute module exists
 		
 		$csv_rows = array();  //hold the plain values.
 
 			$temp_csv = array();
 			foreach ($header as $new_csv_val) {
-			    $temp_csv[] =  strip_tags($new_csv_val['data']);
-			  }
+			  $temp_csv[] =  strip_tags($new_csv_val['data']);
+			}
 			$csv_rows[]=$temp_csv;
 		
 		
@@ -113,19 +133,29 @@ function uc_who_bought_what_report() {
 			$temparray[]=  $customer['Phone'];
 			$temparray[]=  number_format($customer['Price'],2);
 			$temparray[]=  $customer['HowPay'];
-			$temparray[]=  l($customer['Status'],'admin/store/orders/' . $customer['Ord']);
-		  $temparray[]=  l($customer['Ord'],'admin/store/orders/' . $customer['Ord']);
-			$temparray[]=  l($customer['Itm'],'admin/store/orders/' . $customer['Ord']);
+			$temparray[]=  l($customer['Status'],'admin/store/orders/' . $customer['ID']);
+		  $temparray[]=  l("#" . $customer['ID'],'admin/store/orders/' . $customer['ID']);
       
+			
 			$email_addresses[] = $customer['Email'];  //add to the list
-			  
+			
+			//now to deal with the serialized data, including node checkout and attributes
+			
 			$mydata=unserialize($customer['OrderData']);
+			
+			if ($checkout && isset($mydata['node_checkout_nid']))  {
+			  $nodeval = $mydata['node_checkout_nid'];
+			  $mychk = node_load($nodeval);
+			  $temparray[]=  l($mychk->title, 'node/' . $nodeval);
+			};
+			
+			
       if (!is_null($attrlist)){
 			  foreach ($attrlist as $myattrib) { 
 				 $thisdatum = $mydata['attributes'][$myattrib['data']];
 				 if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
 				   $temparray[] = implode(' | ', $thisdatum);
-				  } else {$temparray[] = $thisdatum;}   
+				  } else {$temparray[] = $thisdatum;} 
 			  }
 			}
 			
@@ -166,18 +196,26 @@ function uc_who_bought_what_report() {
 
 
 function uc_who_bought_what_form($form_state) {
-  
-	global $user;
-	if ($user->uid != 1){
-	  $anduidlimit = " WHERE {node}.uid = $user->uid ";
-	}
-	
-  $products = db_query("SELECT DISTINCT({uc_products}.nid) AS nid, {node}.title AS title, {uc_product_classes}.name AS type 
+
+global $user;
+
+  $listquery = "SELECT DISTINCT({uc_products}.nid) AS nid, {node}.title AS title, {uc_product_classes}.name AS type, {node}.status as status 
     FROM {uc_products}
     INNER JOIN {node} ON {uc_products}.nid = {node}.nid
     LEFT JOIN {uc_product_classes} ON {uc_product_classes}.pcid = {node}.type
-    $anduidlimit
-    ORDER BY {uc_product_classes}.name, {node}.title");
+		WHERE status = status";
+		
+	if (user_access('view all uc_who_bought_what') || $user->uid == 1) 
+	  $listquery .= ''; // do nothing. see all
+	else {
+	  if (user_access('view uc_who_bought_what'))	
+		  $listquery .= " AND {node}.uid = $user->uid";  //limit to my stuff
+			drupal_set_message("Only displaying reports for items posted by $user->name.");
+		};	
+
+  $listquery .=  " ORDER BY {uc_product_classes}.name, {node}.title";
+  
+  $products = db_query($listquery);
 
   $product_list[0] = t('Select an item...');
   
@@ -194,9 +232,10 @@ function uc_who_bought_what_form($form_state) {
   
   $form['product_select'] = array(
     '#type' => 'select',
-    '#title' => t('Choose an item'),
+    '#title' => t('Choose a product'),
     '#default_value' => variable_get('product_select',0),
     '#options' => $product_list,
+    '#description' => t('Choose a product.'),
   );
   $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
   
@@ -214,8 +253,8 @@ function uc_who_bought_what_form_validate($form_id, $form_values) {
 
 
 function uc_who_bought_what_form_submit($form, $form_values) {
- 
-  //drupal_set_message($_GET['year'] . t($form_values['values']['product_select']));
+  //drupal_set_message(t('Your form has been saved.'));
+  //drupal_set_message(t($form_values['values']['product_select']));
   //drupal_set_message(t(print_r($form_values, true)));
   variable_set('product_select', $form_values['values']['product_select']);
 } // function uc_who_bought_what_form_submit
@@ -244,7 +283,7 @@ function uc_who_bought_what_menu() {
     'title' => 'Who Bought What',
     'description' => 'View reports of users who purchased specific products',
     'page callback' => 'uc_who_bought_what_report',
-    'access arguments' => array('view uc_who_bought_what'),
+    'access arguments' => array('view uc_who_bought_what', 'view all who bought what'),
     'type' => MENU_NORMAL_ITEM,
    );
 
