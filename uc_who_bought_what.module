@@ -283,7 +283,7 @@ function uc_who_bought_what_menu() {
     'title' => 'Who Bought What',
     'description' => 'View reports of users who purchased specific products',
     'page callback' => 'uc_who_bought_what_report',
-    'access arguments' => array('view uc_who_bought_what', 'view all who bought what'),
+    'access arguments' => array('view uc_who_bought_what'),
     'type' => MENU_NORMAL_ITEM,
    );
 
