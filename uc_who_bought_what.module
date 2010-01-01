@@ -9,6 +9,7 @@
  *
  * Adds an additional menu item to the Ubercart Reports, that lists the customers
  * who purchased certain products. 
+ * now fixed permissions and table prefixes
  *
  * Copyright 2009 Michael Moradzadeh Cayenne.SF@gmail.com
  * based on code by Misha Chitharanjan ubercart@mishac.com
@@ -27,7 +28,7 @@
  * Display the purchaser list report
  */
 function uc_who_bought_what_report() {
-  
+ 
   $product_id = $_GET['pid'];
   
   $page = (!is_null($_GET['page'])) ? intval($_GET['page']) : 0;
@@ -36,6 +37,10 @@ function uc_who_bought_what_report() {
   $csv_rows = array();
   
   $output = drupal_get_form('uc_who_bought_what_form');
+  $uc_order_products = db_prefix_tables('uc_order_products');
+  $uc_orders = db_prefix_tables('uc_orders');
+  $uc_node_checkout_order_products = db_prefix_tables('uc_node_checkout_order_products');
+
   
   if ($product_id) {
     $node = node_load($product_id);
@@ -46,6 +51,8 @@ function uc_who_bought_what_report() {
 				
 		if (module_exists('uc_node_checkout')){
 		  //First, see if this node has a node checkout
+		  
+		  $uc_node_checkout_order_products = db_prefix_tables('uc_node_checkout_order_products');
 		  $sql = "SELECT node_type, product_nid from {uc_node_checkout_types} WHERE product_nid = $product_id";
 			$checknode = db_fetch_array(db_query($sql));
 			if($checknode) {
@@ -58,16 +65,16 @@ function uc_who_bought_what_report() {
     $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . '</h3>';
     
     $header = array(
-			array('data' => t('Qty'), 'field' => "{uc_order_products}.qty"),
-			array('data' => t('LName'), 'field' => "{uc_orders}.billing_last_name"),
-			array('data' => t('FName'), 'field' => "{uc_orders}.billing_first_name"),
-      array('data' => t('Email'), 'field' => "{uc_orders}.primary_email"),
-			array('data' => t('Phone'), 'field' => "{uc_orders}.billing_phone"),
-			array('data' => t('Price'), 'field' => "{uc_order_products}.price"),
-  		array('data' => t('Date'), 'field' => "FROM_UNIXTIME({uc_orders}.created, '%Y.%m.%e')"),
-			array('data' => t('HowPay'), 'field' => "{uc_orders}.payment_method"),
-			array('data' => t('Status'), 'field' => "{uc_orders}.order_status"),
-			array('data' => t('ID'), 'field' => "{uc_orders}.order_id"),					
+			array('data' => t('Qty'), 'field' => "$uc_order_products.qty"),
+			array('data' => t('LName'), 'field' => "$uc_orders.billing_last_name"),
+			array('data' => t('FName'), 'field' => "$uc_orders.billing_first_name"),
+      array('data' => t('Email'), 'field' => "$uc_orders.primary_email"),
+			array('data' => t('Phone'), 'field' => "$uc_orders.billing_phone"),
+			array('data' => t('Price'), 'field' => "$uc_order_products.price"),
+  		array('data' => t('Date'), 'field' => "FROM_UNIXTIME($uc_orders.created, '%Y.%m.%e')"),
+			array('data' => t('HowPay'), 'field' => "$uc_orders.payment_method"),
+			array('data' => t('Status'), 'field' => "$uc_orders.order_status"),
+			array('data' => t('ID'), 'field' => "$uc_orders.order_id"),					
     );
 
 		$sqsel = "  "; //now build the sql query
@@ -76,18 +83,18 @@ function uc_who_bought_what_report() {
 				$sqsel .= $hval['field'] . " AS " . $hval['data'];
 				$sqsel .= ", ";
 				}			
-		$sqsel .=   "{uc_orders}.uid" .  " AS uid ,";  
+		$sqsel .=   "$uc_orders.uid" .  " AS uid ,";  
 		
-   if($checkout) $sqsel .=   db_prefix_tables('{uc_node_checkout_order_products}.nid') .  " AS checkOutNode ,"; // if it exists
+   if($checkout) $sqsel .=   "$uc_node_checkout_order_products.nid" .  " AS checkOutNode ,"; // if it exists
 		
-		$sqsel .=   db_prefix_tables('{uc_order_products}.data') .  " AS OrderData ";	// this is to collect the raw attribute data and also not to have a comma at the end
+		$sqsel .=   "$uc_order_products.data" .  " AS OrderData ";	// this is to collect the raw attribute data and also not to have a comma at the end
 
-	  $sql = "SELECT  $sqsel FROM {uc_orders} JOIN {uc_order_products}" . 
-			 " ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
-			 " AND {uc_order_products}.nid  =  $product_id" ; 
+	  $sql = "SELECT  $sqsel FROM $uc_orders JOIN $uc_order_products" . 
+			 " ON $uc_order_products.order_id = $uc_orders.order_id " . 
+			 " AND $uc_order_products.nid  =  $product_id" ; 
 			 
-       if($checkout) $sql .=  " LEFT JOIN {uc_node_checkout_order_products}" ; // if it exists
-		   if($checkout) $sql .=  " ON {uc_node_checkout_order_products}.order_product_id = {uc_order_products}.order_product_id" ;
+       if($checkout) $sql .=  " LEFT JOIN $uc_node_checkout_order_products" ; // if it exists
+		   if($checkout) $sql .=  " ON $uc_node_checkout_order_products.order_product_id = $uc_order_products.order_product_id" ;
 			 			 
        $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled'";
     
@@ -102,9 +109,13 @@ function uc_who_bought_what_report() {
 				
 		if (module_exists('uc_attribute')){
 		
+		  $uc_attributes = db_prefix_tables('uc_attributes');
+	   $uc_product_attributes = db_prefix_tables('uc_product_attributes');
+		  
+		
       //Collect and unserialize the attributes.  First, the names
-		   $attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(att.label)>0,att.label, att.name) AS label, uca.nid FROM {uc_attributes} att 
-		   JOIN {uc_product_attributes} uca ON uca.aid=att.aid AND nid = %d Order By ordering, name";
+		   $attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(att.label)>0,att.label, att.name) AS label, uca.nid FROM $uc_attributes att 
+		   JOIN $uc_product_attributes uca ON uca.aid=att.aid AND nid = %d Order By ordering, name";
 		   $attresults = (db_query($attsql, $product_id));
 		
 			 while ($attrow = db_fetch_array($attresults)) {
@@ -205,7 +216,7 @@ global $user;
     LEFT JOIN {uc_product_classes} ON {uc_product_classes}.pcid = {node}.type
 		WHERE status = status";
 		
-	if (user_access('view all uc_who_bought_what')) 
+	if (user_access('view all who bought what')) 
 	  $listquery .= ''; // do nothing. see all
 	else {
 	  if (user_access('view uc_who_bought_what'))	
