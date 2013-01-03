@@ -129,12 +129,19 @@ function uc_who_bought_what_report() {
 
 			if (isset($attrlist)){
 				foreach ($attrlist as $myattrib) {
-				 $thisdatum = $mydata['attributes'][$myattrib['data']]; //might be null
-				 if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
-				 	$temparray[] = check_plain(implode(' | ', $thisdatum));
-				 } else {$temparray[] = check_plain($thisdatum);}
-				}
-			}
+				  if(isset($mydata['attributes'][$myattrib['data']])){
+					 $thisdatum = $mydata['attributes'][$myattrib['data']]; //might be null
+				     if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
+				 	    $temparray[] = check_plain(implode(' | ', $thisdatum));
+				     }	//end if isarray	  
+				  
+				  }//end if isset
+				  else{// need a placeholder to keep table aligned
+				    $temparray[]=NULL;
+				  }
+
+				}//end for each
+			}// end if attr
 
 			$rows[] = $temparray;
 
