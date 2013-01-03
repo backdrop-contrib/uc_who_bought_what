@@ -127,7 +127,7 @@ function uc_who_bought_what_report() {
 
 			$mydata=unserialize($customer->orderdata);
 
-			if (!is_null($attrlist)){
+			if (isset($attrlist)){
 				foreach ($attrlist as $myattrib) {
 				 $thisdatum = $mydata['attributes'][$myattrib['data']]; //might be null
 				 if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
