@@ -11,7 +11,7 @@
  * who purchased certain products.  And totals, and show all records
  *
  * Copyright 2011 Michael Moradzadeh Cayenne.SF@gmail.com
- * Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
+ * Initial Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
  * Based on code from Ubercart project.
  * Released under GPL.
  */
@@ -22,22 +22,25 @@ function uc_who_bought_what_report() {
 	$csv = (isset($_GET['csv'])) ? TRUE : FALSE; //branch, depending on whether this is or is not a call for a .csv file
 	// if a node was specified, it better be one you can look at!
 
-	$node = node_load($product_id);
+
 
 	if ($product_id <= 0) {
 		return drupal_get_form('uc_who_bought_what_form');
 	}
 
 	if ($product_id>=1){
+	$node = node_load($product_id);
+	global $user;
 		$output = "";
-		if(!node_access('view', $node)){
-	  drupal_set_message('You are not authorized to view who bought that item.  Please contact your site or shop administrator', 'warning');
+		if(!user_access('view all who bought what')&& !(user_access('view own who bought what') && $node->uid==$user->uid) ){
+		
+		drupal_set_message('You are not authorized to view who bought that item.  Please contact your site or shop administrator', 'warning');
 	  return drupal_access_denied();
 		}
 
-		$tql =	"SELECT COUNT(ucop.qty) AS ordcount, SUM(ucop.qty) AS grandtotal FROM {uc_order_products} ucop" .
-		" JOIN {uc_orders} uco ON ucop.order_id = uco.order_id " . 
-		" AND ucop.nid  =  :product_id  WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned'" ;
+		$tql =	"SELECT COUNT(uc_order_products.qty) AS ordcount, SUM(uc_order_products.qty) AS grandtotal FROM uc_order_products" .
+		" JOIN uc_orders ON uc_order_products.order_id = uc_orders.order_id " . 
+		" AND uc_order_products.nid  =  :product_id  WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' " ;
 
 		$tquery = db_query($tql,array(':product_id'=>$product_id));
 
@@ -46,18 +49,18 @@ function uc_who_bought_what_report() {
 		}
 
 		$header = array( //thanks to blackice78 for this code fix
-		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "ucop.qty"),
-		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "uco.billing_last_name"),
-		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "uco.billing_first_name"),
-		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "uco.primary_email"),
-		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "uco.billing_phone"),
-		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "ucop.price"),
-		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(ucop.price * ucop.qty)"),
-		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "uco.created"),
-		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "uco.payment_method"),
-		array('data' => t('Status'),'field' => 'status','sql_field' => "uco.order_status"),
-		array('data' => t('ID'),    'field' => 'id',    'sql_field' => "uco.order_id"),
-		array('data' => t('Model'),    'field' => 'model',    'sql_field' => "ucop.model"),
+		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "uc_order_products.qty"),
+		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "uc_orders.billing_last_name"),
+		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "uc_orders.billing_first_name"),
+		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "uc_orders.primary_email"),
+		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "uc_orders.billing_phone"),
+		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "uc_order_products.price"),
+		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products.price * uc_order_products.qty)"),
+		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "uc_orders.created"),
+		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "uc_orders.payment_method"),
+		array('data' => t('Status'),'field' => 'status','sql_field' => "uc_orders.order_status"),
+		array('data' => t('ID'),    'field' => 'id',    'sql_field' => "uc_orders.order_id"),
+		array('data' => t('Model'),    'field' => 'model',    'sql_field' => "uc_order_products.model"),
 		);
 
 		$sqsel = "  "; //now build the sql query
@@ -65,26 +68,26 @@ function uc_who_bought_what_report() {
 			$sqsel .= $hval['sql_field'] . " AS " . $hval['field'];
 			$sqsel .= ", ";
 		}
-		$sqsel .=   "uco.uid" .  " AS uid , uco.*,  uccb.country_name AS bill_country, uccs.country_name AS ship_country, " ;
+		$sqsel .=   "uc_orders.uid" .  " AS uid , uc_orders.*,  uccb.country_name AS bill_country, uccs.country_name AS ship_country, " ;
 		$sqsel .=   "uccbz.zone_code AS bill_zone, uccsz.zone_code AS ship_zone, " ;
 
-	 $sqsel .=   "ucop.data AS orderdata ";	// this is to collect the raw attribute data and also not to have a comma at the end
-	 $sql = "SELECT  $sqsel FROM {uc_orders} uco ".
-	  		 " JOIN {uc_order_products} ucop " . 
-			 " ON ucop.order_id = uco.order_id " . 
-			 " AND ucop.nid  =  :product_id " .
-			 " LEFT JOIN {uc_countries} uccb ON uco.billing_country = uccb.country_id " . 
-			 " LEFT JOIN {uc_countries} uccs ON uco.delivery_country = uccs.country_id " .
- 			 " LEFT JOIN {uc_zones} uccbz ON uco.billing_country = uccbz.zone_country_id AND uco.billing_zone = uccbz.zone_id " .
-			 " LEFT JOIN {uc_zones} uccsz ON uco.delivery_country = uccsz.zone_country_id AND uco.delivery_zone = uccsz.zone_id "  ;
+	 $sqsel .=   "uc_order_products.data AS orderdata ";	// this is to collect the raw attribute data and also not to have a comma at the end
+	 $sql = "SELECT  $sqsel FROM uc_orders ".
+	  		 " JOIN uc_order_products" . 
+			 " ON uc_order_products.order_id = uc_orders.order_id " . 
+			 " AND uc_order_products.nid  =  :product_id " .
+			 " LEFT JOIN uc_countries uccb ON uc_orders.billing_country = uccb.country_id " . 
+			 " LEFT JOIN uc_countries uccs ON uc_orders.delivery_country = uccs.country_id " .
+ 			 " LEFT JOIN uc_zones uccbz ON uc_orders.billing_country = uccbz.zone_country_id AND uc_orders.billing_zone = uccbz.zone_id " .
+			 " LEFT JOIN uc_zones uccsz ON uc_orders.delivery_country = uccsz.zone_country_id AND uc_orders.delivery_zone = uccsz.zone_id "  ;
 
 	 $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' ";
 	 $customers = db_query($sql,array(":product_id"=>$product_id));
 
 	 if (module_exists('uc_attribute')){
 	 	//Collect and unserialize the attributes.  First, the names
-	 	$attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(uca.label)>0,uca.label, att.name) AS label, uca.nid FROM {uc_attributes} att
-		   JOIN {uc_product_attributes} uca ON uca.aid=att.aid AND nid = :d Order By ordering, name";
+	 	$attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(uca.label)>0,uca.label, att.name) AS label, uca.nid FROM uc_attributes att
+		   JOIN uc_product_attributes uca ON uca.aid=att.aid AND nid = :d Order By ordering, name";
 	 	$attresults = (db_query($attsql, array(":d"=>$product_id)));
 
 	 	foreach ($attresults as $attrow) {
@@ -118,7 +121,7 @@ function uc_who_bought_what_report() {
 			$temparray[]=  number_format($customer->price,2);
 			$temparray[]=  number_format($customer->total,2);
 			$temparray[]=  strftime ('%Y.%m.%d',$customer->date);
-			$temparray[]=  l(t($customer->howpay),'admin/store/orders/' . $customer->id . 'payments');
+			$temparray[]=  $customer->howpay;
 			$temparray[]=  l(t($customer->status),'admin/store/orders/' . $customer->id);
 			$temparray[]=  l(t("#" . $customer->id),'admin/store/orders/' . $customer->id);
 			$temparray[]=  check_plain($customer->model);
@@ -162,13 +165,17 @@ function uc_who_bought_what_report() {
 			}
 
 		}
-		$output .= theme('table' ,array('header'=>$header,'rows'=>$rows,'width' => '100%', 'class' => 'uc-sales-table') );
-		$output .= '<div class="uc-reports-links">';
+		if (!empty($rows)) {
+		  $output .= theme('table' ,array('header'=>$header,'rows'=>$rows,'width' => '100%', 'class' => 'uc-sales-table') );
+		  $output .= '<div class="uc-reports-links">';
 
-		$output .= l(t('Export ' . (sizeof($csv_rows)-1) . ' rows to csv file'), "admin/store/reports/uc_who_bought_what", array('query'=> array('csv'=> "TRUE", 'pid' =>$product_id)));
+		  $output .= l(t('Export ' . (sizeof($csv_rows)-1) . ' rows to csv file'), "admin/store/reports/uc_who_bought_what", array('query'=> array('csv'=> "TRUE", 'pid' =>$product_id)));
 
-		$output .= '<div class="email-addresses"><h4>Email Addresses</h4><label for="email-addresses-textarea" value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode(', ', $email_addresses). '</textarea></div>';
-
+		  $output .= '<div class="email-addresses"><h4>Email Addresses</h4><label for="email-addresses-textarea" value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode(', ', $email_addresses). '</textarea></div>';
+        }
+		else{
+		  $output .= "no results found please go back and pick another item";
+		}
 		if (!$csv)return $output;
 		else{
 			drupal_add_http_header('Content-Type', 'text/csv');
@@ -258,24 +265,24 @@ function uc_who_bought_what_form_submit($form, $form_values) {
  * Module and Helper Functions
  ******************************************************************************/
 
+
 /**
  * Valid permissions for this module
  * @return array An array of valid permissions for the uc_who_bought_what module
  */
 
 function uc_who_bought_what_permission() {
-
-	$permissions = array(
-	    'view own who bought what' => array(
-	      'title' => t('View what users bought YOUR products'),
-	      'restrict access' => FALSE,
-	    ),
-	    'view all who bought what' => array(
-	      'title' => t('View what users bought ANY products'),
-	      'restrict access' => FALSE,
-	    ));
-	return $permissions;
-} // function uc_who_bought_what_permission
+  return array(
+    'view own who bought what' => array(
+      'title' => t('View own who bought what'), 
+      'description' => t('Allow user to see sales of items they own'),
+    ), 
+    'view all who bought what' => array(
+      'title' => t('View all who bought what'), 
+      'description' => t('Allow users to access all sales of all items'),
+    ),
+  );
+}
 
 
 function uc_who_bought_what_menu() {
