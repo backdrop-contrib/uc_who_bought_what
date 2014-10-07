@@ -5,3 +5,10 @@ core = 7.x
 package = "Ubercart - extra"
 
 
+
+; Information added by drupal.org packaging script on 2013-10-19
+version = "7.x-1.1+0-dev"
+core = "7.x"
+project = "uc_who_bought_what"
+datestamp = "1382149740"
+

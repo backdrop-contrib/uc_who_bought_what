@@ -22,8 +22,6 @@ function uc_who_bought_what_report() {
 	$csv = (isset($_GET['csv'])) ? TRUE : FALSE; //branch, depending on whether this is or is not a call for a .csv file
 	// if a node was specified, it better be one you can look at!
 
-
-
 	if ($product_id <= 0) {
 		return drupal_get_form('uc_who_bought_what_form');
 	}
@@ -38,9 +36,9 @@ function uc_who_bought_what_report() {
 	  return drupal_access_denied();
 		}
 
-		$tql =	"SELECT COUNT(uc_order_products.qty) AS ordcount, SUM(uc_order_products.qty) AS grandtotal FROM uc_order_products" .
-		" JOIN uc_orders ON uc_order_products.order_id = uc_orders.order_id " . 
-		" AND uc_order_products.nid  =  :product_id  WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' " ;
+		$tql =	"SELECT COUNT(uc_order_products.qty) AS ordcount, SUM(uc_order_products.qty) AS grandtotal FROM {uc_order_products}" .
+		" JOIN {uc_orders} ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
+		" AND {uc_order_products}.nid  =  :product_id  WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' " ;
 
 		$tquery = db_query($tql,array(':product_id'=>$product_id));
 
@@ -49,18 +47,18 @@ function uc_who_bought_what_report() {
 		}
 
 		$header = array( //thanks to blackice78 for this code fix
-		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "uc_order_products.qty"),
-		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "uc_orders.billing_last_name"),
-		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "uc_orders.billing_first_name"),
-		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "uc_orders.primary_email"),
-		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "uc_orders.billing_phone"),
-		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "uc_order_products.price"),
-		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products.price * uc_order_products.qty)"),
-		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "uc_orders.created"),
-		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "uc_orders.payment_method"),
-		array('data' => t('Status'),'field' => 'status','sql_field' => "uc_orders.order_status"),
-		array('data' => t('ID'),    'field' => 'id',    'sql_field' => "uc_orders.order_id"),
-		array('data' => t('Model'),    'field' => 'model',    'sql_field' => "uc_order_products.model"),
+		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "{uc_order_products}.qty"),
+		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "{uc_orders}.billing_last_name"),
+		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "{uc_orders}.billing_first_name"),
+		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "{uc_orders}.primary_email"),
+		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "{uc_orders}.billing_phone"),
+		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "{uc_order_products}.price"),
+		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products}.price * {uc_order_products}.qty)"),
+		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "{uc_orders}.created"),
+		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "{uc_orders}.payment_method"),
+		array('data' => t('Status'),'field' => 'status','sql_field' => "{uc_orders}.order_status"),
+		array('data' => t('id'),    'field' => 'id',    'sql_field' => "{uc_orders}.order_id"),
+		array('data' => t('Model'),    'field' => 'model',    'sql_field' => "{uc_order_products}.model"),
 		);
 
 		$sqsel = "  "; //now build the sql query
@@ -72,28 +70,27 @@ function uc_who_bought_what_report() {
 		$sqsel .=   "uccbz.zone_code AS bill_zone, uccsz.zone_code AS ship_zone, " ;
 
 	 $sqsel .=   "uc_order_products.data AS orderdata ";	// this is to collect the raw attribute data and also not to have a comma at the end
-	 $sql = "SELECT  $sqsel FROM uc_orders ".
-	  		 " JOIN uc_order_products" . 
-			 " ON uc_order_products.order_id = uc_orders.order_id " . 
-			 " AND uc_order_products.nid  =  :product_id " .
-			 " LEFT JOIN uc_countries uccb ON uc_orders.billing_country = uccb.country_id " . 
-			 " LEFT JOIN uc_countries uccs ON uc_orders.delivery_country = uccs.country_id " .
- 			 " LEFT JOIN uc_zones uccbz ON uc_orders.billing_country = uccbz.zone_country_id AND uc_orders.billing_zone = uccbz.zone_id " .
-			 " LEFT JOIN uc_zones uccsz ON uc_orders.delivery_country = uccsz.zone_country_id AND uc_orders.delivery_zone = uccsz.zone_id "  ;
+	 $sql = "SELECT  $sqsel FROM {uc_orders} ".
+	  		 " JOIN {uc_order_products}" . 
+			 " ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
+			 " AND {uc_order_products}.nid  =  :product_id " .
+			 " LEFT JOIN {uc_countries} uccb ON {uc_orders}.billing_country = uccb.country_id " . 
+			 " LEFT JOIN {uc_countries} uccs ON {uc_orders}.delivery_country = uccs.country_id " .
+ 			 " LEFT JOIN {uc_zones} uccbz ON {uc_orders}.billing_country = uccbz.zone_country_id AND {uc_orders}.billing_zone = uccbz.zone_id " .
+			 " LEFT JOIN {uc_zones} uccsz ON {uc_orders}.delivery_country = uccsz.zone_country_id AND {uc_orders}.delivery_zone = uccsz.zone_id "  ;
 
 	 $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' ";
 	 $customers = db_query($sql,array(":product_id"=>$product_id));
 
 	 if (module_exists('uc_attribute')){
 	 	//Collect and unserialize the attributes.  First, the names
-	 	$attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(uca.label)>0,uca.label, att.name) AS label, uca.nid FROM uc_attributes att
-		   JOIN uc_product_attributes uca ON uca.aid=att.aid AND nid = :d Order By ordering, name";
+	 	$attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(uca.label)>0,uca.label, att.name) AS label, uca.nid FROM {uc_attributes} att
+		   JOIN {uc_product_attributes} uca ON uca.aid=att.aid AND nid = :d Order By ordering, name";
 	 	$attresults = (db_query($attsql, array(":d"=>$product_id)));
 
 	 	foreach ($attresults as $attrow) {
-	 		$header[]=array('data'=>t($attrow->label));
+	 		$header[]=array('data'=>t($attrow->label),'field'=>$attrow->label);
 	 		$attrlist[] = array('data'=>t($attrow->label));
-
 	 	}
 		} //end if attribute module exists
 
@@ -114,16 +111,16 @@ function uc_who_bought_what_report() {
 		foreach ($customers as $customer) {
 			$temparray = array();
 			$temparray[]=  $customer->qty;
-			$temparray[]=  l( t(check_plain($customer->lname)) , 'user/' . $customer->uid);
-			$temparray[]=  l( t(check_plain($customer->fname)), 'user/' . $customer->uid);
-			$temparray[]=  l( t($customer->email), 'mailto:' . $customer->email);
+			$temparray[]=  l(  check_plain($customer->lname) , 'user/' . $customer->uid);
+			$temparray[]=  l(  check_plain($customer->fname), 'user/' . $customer->uid);
+			$temparray[]=  l(  check_plain($customer->email), 'mailto:' . $customer->email);
 			$temparray[]=  check_plain($customer->phone);
 			$temparray[]=  number_format($customer->price,2);
 			$temparray[]=  number_format($customer->total,2);
 			$temparray[]=  strftime ('%Y.%m.%d',$customer->date);
 			$temparray[]=  $customer->howpay;
 			$temparray[]=  l(t($customer->status),'admin/store/orders/' . $customer->id);
-			$temparray[]=  l(t("#" . $customer->id),'admin/store/orders/' . $customer->id);
+			$temparray[]=  l(("#" . $customer->id),'admin/store/orders/' . $customer->id);
 			$temparray[]=  check_plain($customer->model);
 
 			$email_addresses[] = $customer->email;  //add to the list
@@ -166,7 +163,21 @@ function uc_who_bought_what_report() {
 
 		}
 		if (!empty($rows)) {
-		  $output .= theme('table' ,array('header'=>$header,'rows'=>$rows,'width' => '100%', 'class' => 'uc-sales-table') );
+		  // look for sort command
+		  if(isset($_GET['sort'])&&isset($_GET['order'])){
+		    $fnum=0;
+			while(isset($header[$fnum]['data']) && $header[$fnum]['data']!=$_GET['order']){
+			  $fnum++;
+			} // now it points to the correct field
+			
+			if($_GET['sort']=='desc'){
+			  krsort($rows,$fnum);
+			 } else {
+			   ksort($rows,$fnum);
+			 }
+		  }
+
+		  $output .= theme('table',array('header'=>$header,'rows'=>$rows,'width' => '100%', 'class' => 'uc-sales-table') );
 		  $output .= '<div class="uc-reports-links">';
 
 		  $output .= l(t('Export ' . (sizeof($csv_rows)-1) . ' rows to csv file'), "admin/store/reports/uc_who_bought_what", array('query'=> array('csv'=> "TRUE", 'pid' =>$product_id)));
