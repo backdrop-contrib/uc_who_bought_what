@@ -43,7 +43,7 @@ function uc_who_bought_what_report() {
 		$tquery = db_query($tql,array(':product_id'=>$product_id));
 
 		foreach ($tquery as $tresult) {
-			$output .= '<h3>' . l($node->title , 'node/' . $node->uid) . " ($tresult->grandtotal sold in $tresult->ordcount orders)</h3>";
+			$output .= '<h3>' . l($node->title , 'node/' . $node->nid) . " ($tresult->grandtotal sold in $tresult->ordcount orders)</h3>";
 		}
 
 		$header = array( //thanks to blackice78 for this code fix
