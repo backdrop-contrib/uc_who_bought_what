@@ -226,7 +226,7 @@ function uc_who_bought_what_form($form,$form_state) {
 	$listquery .= ''; // do nothing. see all
 	else {
 		if (user_access('view own who bought what'))
-		$listquery .= " AND {node}.uid = :uid";
+		$listquery .= " WHERE {node}.uid = :uid";
 		drupal_set_message("Only displaying reports for items posted by $user->name.");
 	};
 
