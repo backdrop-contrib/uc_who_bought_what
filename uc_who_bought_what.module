@@ -16,9 +16,149 @@
  * Released under GPL.
  */
 
-function uc_who_bought_what_report() {
+/************
+*
+* Get an array of data and an array of headers
+*
+*************/ 
+ 
+function uc_who_bought_what_data($pid, $csv=false){
+  	// check for the redeem module
+	
+	if(module_exists('redeem') && redeem_is_redeemable($pid)){
+	  $redeem = TRUE;
+	} else {
+	  $redeem = FALSE;
+	}
+	
+	
+	$header = array( //thanks to blackice78 for this code fix
+		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "{uc_order_products}.qty"),
+		array('data' => t('Rdm'),   'field' => 'rdm',   'sql_field' => "rr.rdm"),
+		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "{uc_orders}.billing_last_name"),
+		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "{uc_orders}.billing_first_name"),
+		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "{uc_orders}.primary_email"),
+		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "{uc_orders}.billing_phone"),
+		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "{uc_order_products}.price"),
+		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products}.price * {uc_order_products}.qty)"),
+		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "{uc_orders}.created"),
+		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "{uc_orders}.payment_method"),
+		array('data' => t('Status'),'field' => 'status','sql_field' => "{uc_orders}.order_status"),
+		array('data' => t('id'),    'field' => 'id',    'sql_field' => "{uc_orders}.order_id"),
+		array('data' => t('Model'),  'field' => 'model',    'sql_field' => "{uc_order_products}.model"),
+		);
+	
+	if(!$redeem) unset($header[1]); // if not using redeem module, don't need this column.
+	
+	 //We are ready to collect the data
+	 $rows = array();
+	 
+	 $selects = array();
+	 foreach($header as $item){
+	   $selects[] = "{$item['sql_field']} AS {$item['field']}";
+	 }
+	 $selects[] = "{uc_order_products}.data AS opdata"; // get the line item data
+	 $selects[] = "{uc_orders}.uid AS uid ";
+	 
+	 if($csv){
+	   $selects[] = "uccb.country_name AS bill_country";
+	   $selects[] = "uccs.country_name AS ship_country";
+	   $selects[] = "uccbz.zone_code AS bill_zone";
+	   $selects[] = "uccsz.zone_code AS ship_zone";
+	 }
+	 $sqsel = implode(',', $selects);
+     
+	 //if($redeem) $sqsel .= ', redcount '; 
 
-	$product_id = (isset($_GET['pid'])) ? intval($_GET['pid']) : 0;
+	 $sqsel .=   ", {uc_orders}.*, {uc_order_products}.data AS orderdata ";	// this is to collect the raw attribute data and also not to have a comma at the end
+	
+	 $sql = "SELECT  $sqsel FROM {uc_orders} ".
+	  		 " JOIN {uc_order_products}" . 
+			 " ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
+			 " AND {uc_order_products}.nid  =  :product_id " .
+			 " LEFT JOIN {uc_countries} uccb ON {uc_orders}.billing_country = uccb.country_id " . 
+			 " LEFT JOIN {uc_countries} uccs ON {uc_orders}.delivery_country = uccs.country_id " .
+ 			 " LEFT JOIN {uc_zones} uccbz ON {uc_orders}.billing_country = uccbz.zone_country_id AND {uc_orders}.billing_zone = uccbz.zone_id " .
+			 " LEFT JOIN {uc_zones} uccsz ON {uc_orders}.delivery_country = uccsz.zone_country_id AND {uc_orders}.delivery_zone = uccsz.zone_id "  ;	
+	 if($redeem){
+	   $sql .= " LEFT JOIN (SELECT SUM(qty) AS rdm, opid FROM {redeem_redeemed} GROUP BY opid) rr ON rr.opid = {uc_order_products}.order_product_id ";
+	 }
+	
+	 $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' ";
+	 $customers = db_query($sql,array(":product_id"=>$pid));
+	 
+	 if (module_exists('uc_attribute')){ //Attributes are very popular
+	  //Set a flag 
+	  $attr = TRUE;
+	  // get the header values
+	  $attrheads = uc_who_bought_what_attrib_list($pid);
+	 
+	  foreach($attrheads as $ahead=>$order){
+	  
+	    $header[] = array('data' =>$ahead, 'field'=> $ahead); // add the attributes in set order
+	  }
+	} else {
+	  $attr = FALSE;
+	}
+	if($csv){ //add csv files
+		$csv_xtra = array('delivery_first_name', 'delivery_last_name', 'delivery_phone', 'delivery_company', 'delivery_street1', 'delivery_street2', 'delivery_city', 'ship_zone', 'delivery_postal_code', 'ship_country', 'billing_first_name', 'billing_last_name', 'billing_phone', 'billing_company', 'billing_street1', 'billing_street2', 'billing_city', 'bill_zone', 'billing_postal_code', 'bill_country');
+		foreach($csv_xtra as $newhead){
+			$header[] = array('data' =>$newhead, 'field'=> $newhead);
+		}
+	}
+
+	 $emails = array();
+	 while($row = $customers->fetchAssoc()){
+	   
+	   if($attr){ // need to deserialize the attribs
+	     $data = unserialize($row['orderdata']);
+
+		 foreach($data['attributes'] as $label => $atr){
+		   $row[$label] = implode(',',$atr);
+		 }
+	   }
+	   $trow = array();
+	   foreach($header as $head){
+	     $trow[$head['data']] = isset($row[$head['field']])?$row[$head['field']]:null;;
+	   }
+	   // now some special cleanups
+	   $trow['Date'] = strftime ('%Y.%m.%d',$trow['Date']);
+	   $trow['Price'] = number_format($trow['Price'],2);
+	   $trow['Total'] = number_format($trow['Total'],2);
+	   if(!$csv){ 
+	     $trow['id'] = l(("#" . $trow['id']),'admin/store/orders/' . $trow['id']);
+	     $trow['Email'] = l(  check_plain($trow['Email']), 'mailto:' . $trow['Email']);
+	   
+	     $trow['FName'] = l(  check_plain($trow['FName']), 'user/' . $row['uid']);
+	     $trow['LName'] = l(  check_plain($trow['LName']), 'user/' . $row['uid']);
+	     $emails[] = $row['email'];
+	   }else{ 
+	   
+	   }
+	   $rows[]=$trow;
+	   
+	 }
+  return array('header'=>$header, 'rows'=>$rows, 'emails'=>$emails);
+} 
+
+
+function uc_who_bought_what_attrib_list($nid){
+    $sql = "SELECT upa.`label`, ua.`name`, upa.`ordering` FROM {uc_product_attributes} upa 
+	       JOIN {uc_attributes} ua ON ua.aid = upa.aid WHERE nid = :nid ORDER BY `ordering`,`label`";
+    $result = db_query($sql, array(':nid' => $nid));
+	$list = array();
+	while($attr = $result->fetchAssoc()){
+	  if($attr['label'] == '<none>' || $attr['label'] == '') $attr['label'] = $attr['name']; // use the field name for blanks
+	  $list[$attr['label']] = $attr['ordering'];
+	}
+  return $list;
+}
+ 
+
+function uc_who_bought_what_report($nid=0) {
+
+	$product_id = (isset($_GET['pid'])) ? intval($_GET['pid']) : $nid;
+	
 	$csv = (isset($_GET['csv'])) ? TRUE : FALSE; //branch, depending on whether this is or is not a call for a .csv file
 	// if a node was specified, it better be one you can look at!
 
@@ -28,6 +168,7 @@ function uc_who_bought_what_report() {
 
 	if ($product_id>=1){
 	$node = node_load($product_id);
+
 	global $user;
 		$output = "";
 		if(!user_access('view all who bought what')&& !(user_access('view own who bought what') && $node->uid==$user->uid) ){
@@ -45,163 +186,35 @@ function uc_who_bought_what_report() {
 		foreach ($tquery as $tresult) {
 			$output .= '<h3>' . l($node->title , 'node/' . $node->nid) . " ($tresult->grandtotal sold in $tresult->ordcount orders)</h3>";
 		}
+	$vals = uc_who_bought_what_data($product_id, $csv);
+	
+	if(!$csv){ // regular output
+	  $output .= theme('table', array('header' => $vals['header'], 'rows' => $vals['rows'], 'sticky'=>1 ));
+	  $output .= l(t('Export ' . (sizeof($vals['rows'])) . ' rows to csv file'), "node/$product_id/buyers", array('query'=> array('csv'=> "TRUE")));
 
-		$header = array( //thanks to blackice78 for this code fix
-		array('data' => t('Qty'),   'field' => 'qty',   'sql_field' => "{uc_order_products}.qty"),
-		array('data' => t('LName'), 'field' => 'lname', 'sql_field' => "{uc_orders}.billing_last_name"),
-		array('data' => t('FName'), 'field' => 'fname', 'sql_field' => "{uc_orders}.billing_first_name"),
-		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "{uc_orders}.primary_email"),
-		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "{uc_orders}.billing_phone"),
-		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "{uc_order_products}.price"),
-		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products}.price * {uc_order_products}.qty)"),
-		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "{uc_orders}.created"),
-		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "{uc_orders}.payment_method"),
-		array('data' => t('Status'),'field' => 'status','sql_field' => "{uc_orders}.order_status"),
-		array('data' => t('id'),    'field' => 'id',    'sql_field' => "{uc_orders}.order_id"),
-		array('data' => t('Model'),    'field' => 'model',    'sql_field' => "{uc_order_products}.model"),
-		);
-
-		$sqsel = "  "; //now build the sql query
-		foreach($header as $hval){
-			$sqsel .= $hval['sql_field'] . " AS " . $hval['field'];
-			$sqsel .= ", ";
+	  $output .= '<div class="email-addresses"><h4>Email Addresses</h4><label for="email-addresses-textarea" 
+   	    value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode('; ', $vals['emails']). '</textarea></div>';
+	
+	  return $output;
+	} else { //csv output
+	    $csvheads = array();
+		foreach($vals['header'] as $head){
+		  $csvheads[] = $head['data'];
 		}
-		$sqsel .=   "uc_orders.uid" .  " AS uid , uc_orders.*,  uccb.country_name AS bill_country, uccs.country_name AS ship_country, " ;
-		$sqsel .=   "uccbz.zone_code AS bill_zone, uccsz.zone_code AS ship_zone, " ;
-
-	 $sqsel .=   "uc_order_products.data AS orderdata ";	// this is to collect the raw attribute data and also not to have a comma at the end
-	 $sql = "SELECT  $sqsel FROM {uc_orders} ".
-	  		 " JOIN {uc_order_products}" . 
-			 " ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
-			 " AND {uc_order_products}.nid  =  :product_id " .
-			 " LEFT JOIN {uc_countries} uccb ON {uc_orders}.billing_country = uccb.country_id " . 
-			 " LEFT JOIN {uc_countries} uccs ON {uc_orders}.delivery_country = uccs.country_id " .
- 			 " LEFT JOIN {uc_zones} uccbz ON {uc_orders}.billing_country = uccbz.zone_country_id AND {uc_orders}.billing_zone = uccbz.zone_id " .
-			 " LEFT JOIN {uc_zones} uccsz ON {uc_orders}.delivery_country = uccsz.zone_country_id AND {uc_orders}.delivery_zone = uccsz.zone_id "  ;
-
-	 $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' ";
-	 $customers = db_query($sql,array(":product_id"=>$product_id));
-
-	 if (module_exists('uc_attribute')){
-	 	//Collect and unserialize the attributes.  First, the names
-	 	$attsql = "SELECT att.aid, att.ordering, att.name, IF(LENGTH(uca.label)>0,uca.label, att.name) AS label, uca.nid FROM {uc_attributes} att
-		   JOIN {uc_product_attributes} uca ON uca.aid=att.aid AND nid = :d Order By ordering, name";
-	 	$attresults = (db_query($attsql, array(":d"=>$product_id)));
-
-	 	foreach ($attresults as $attrow) {
-	 		$header[]=array('data'=>t($attrow->label),'field'=>$attrow->label);
-	 		$attrlist[] = array('data'=>t($attrow->label));
-	 	}
-		} //end if attribute module exists
-
-
-		$csv_rows = array();  //hold the plain values.
-
-		$temp_csv = array();
-		foreach ($header as $new_csv_val) {
-			$temp_csv[] =  strip_tags($new_csv_val['data']);
-		}
-		$csv_xtra = array('delivery_first_name', 'delivery_last_name', 'delivery_phone', 'delivery_company', 'delivery_street1', 'delivery_street2', 'delivery_city', 'ship_zone', 'delivery_postal_code', 'ship_country', 'billing_first_name', 'billing_last_name', 'billing_phone', 'billing_company', 'billing_street1', 'billing_street2', 'billing_city', 'bill_zone', 'billing_postal_code', 'bill_country');
-		foreach($csv_xtra as $newhead){
-			$temp_csv[] = $newhead;
-		}
-
-		$csv_rows[0]=$temp_csv;
-
-		foreach ($customers as $customer) {
-			$temparray = array();
-			$temparray[]=  $customer->qty;
-			$temparray[]=  l(  check_plain($customer->lname) , 'user/' . $customer->uid);
-			$temparray[]=  l(  check_plain($customer->fname), 'user/' . $customer->uid);
-			$temparray[]=  l(  check_plain($customer->email), 'mailto:' . $customer->email);
-			$temparray[]=  check_plain($customer->phone);
-			$temparray[]=  number_format($customer->price,2);
-			$temparray[]=  number_format($customer->total,2);
-			$temparray[]=  strftime ('%Y.%m.%d',$customer->date);
-			$temparray[]=  $customer->howpay;
-			$temparray[]=  l(t($customer->status),'admin/store/orders/' . $customer->id);
-			$temparray[]=  l(("#" . $customer->id),'admin/store/orders/' . $customer->id);
-			$temparray[]=  check_plain($customer->model);
-
-			$email_addresses[] = $customer->email;  //add to the list
-
-			$mydata=unserialize($customer->orderdata);
-
-			if (isset($attrlist)){
-				foreach ($attrlist as $myattrib) {
-				  if(isset($mydata['attributes'][$myattrib['data']])){
-					 $thisdatum = $mydata['attributes'][$myattrib['data']]; //might be null
-				     if (is_array($thisdatum) == 1) {   //Since UC 6.x-2.0-rc6, attributes are stored as arrays just in case there is more than one selected.
-				 	    $temparray[] = check_plain(implode(' | ', $thisdatum));
-				     }	//end if isarray	  
-				  
-				  }//end if isset
-				  else{// need a placeholder to keep table aligned
-				    $temparray[]=NULL;
-				  }
-
-				}//end for each
-			}// end if attr
-
-			$rows[] = $temparray;
-
-			foreach($csv_xtra as $newhead){
-				$temparray[]=strip_tags($customer->$newhead);
-			}
-
-			$temp_csv = array();
-
-			foreach ($temparray as $new_csv_val) {
-				$temp_csv[] = strip_tags($new_csv_val); // do not need to check_plain because we did that above
-			}
-
-			$csv_rows[]=$temp_csv;
-
-			if (empty($rows)) {
-				$rows[] = array(array('data' => t('No customers found for this item'), 'colspan' => count($header)));
-			}
-
-		}
-		if (!empty($rows)) {
-		  // look for sort command
-		  if(isset($_GET['sort'])&&isset($_GET['order'])){
-		    $fnum=0;
-			while(isset($header[$fnum]['data']) && $header[$fnum]['data']!=$_GET['order']){
-			  $fnum++;
-			} // now it points to the correct field
-			
-			if($_GET['sort']=='desc'){
-			  krsort($rows,$fnum);
-			 } else {
-			   ksort($rows,$fnum);
-			 }
-		  }
-
-		  $output .= theme('table',array('header'=>$header,'rows'=>$rows,'width' => '100%', 'class' => 'uc-sales-table') );
-		  $output .= '<div class="uc-reports-links">';
-
-		  $output .= l(t('Export ' . (sizeof($csv_rows)-1) . ' rows to csv file'), "admin/store/reports/uc_who_bought_what", array('query'=> array('csv'=> "TRUE", 'pid' =>$product_id)));
-
-		  $output .= '<div class="email-addresses"><h4>Email Addresses</h4><label for="email-addresses-textarea" value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode(', ', $email_addresses). '</textarea></div>';
-        }
-		else{
-		  $output .= "no results found please go back and pick another item";
-		}
-		if (!$csv)return $output;
-		else{
-			drupal_add_http_header('Content-Type', 'text/csv');
-			drupal_add_http_header('Content-Disposition', 'attachment; filename=' . 'who_bought_' . convert_to_filename($node->title) . '.csv');
-
-			$new_csv = $csv_rows;
-			foreach ($new_csv as $my_row){
-				$rcount = count($my_row);
-				for ($j = 0; $j<$rcount; $j++){
-					$my_row[$j] = '"' . str_replace('"', '""', $my_row[$j]) . '"';
-				}
-				print implode(',',$my_row) . "\r";
-			}
-		}
+	  	drupal_add_http_header('Content-Type', 'text/csv');
+		drupal_add_http_header('Content-Disposition', 'attachment; filename=' . 'who_bought_' . convert_to_filename($node->title) . '.csv');
+        // create a file pointer connected to the output stream
+        $output = fopen('php://output', 'w');
+        // output the column headings
+        fputcsv($output, $csvheads);
+                
+        // loop over the rows, outputting them
+        foreach ($vals['rows'] as $row) fputcsv($output, $row);
+		
+		return;	
 	}
+	
+  }
 
 } // function uc_who_bought_what_report
 
@@ -307,10 +320,27 @@ function uc_who_bought_what_menu() {
     'access arguments' => array('view own who bought what'),
     'type' => MENU_NORMAL_ITEM,
 	);
+	
+	$items['node/%/buyers'] = array(
+    'title' => 'Who Bought',
+    'description' => 'View reports of users who purchased this product',
+    'page callback' => 'uc_who_bought_what_report',
+	'page arguments' => array(1),
+    'access arguments' => array('view own who bought what'),
+    'type' => MENU_LOCAL_TASK,
+	);
 
 	return $items;
 } // function uc_who_bought_what_menu
 
+//Needed to make it appear in admin menu. Not sure why we need this in this file and not others, but it works
+
+function uc_who_bought_what_admin_paths() {
+  $paths = array(
+    'node/*/buyers' => TRUE,
+  );
+  return $paths;
+}
 
 
 /**
