@@ -10,7 +10,7 @@
  * Adds an additional menu item to the Ubercart Reports, that lists the customers
  * who purchased certain products.  And totals, and show all records
  *
- * Copyright 2011 Michael Moradzadeh Cayenne.SF@gmail.com
+ * Copyright 2011-2015 Michael Moradzadeh Cayenne.SF@gmail.com
  * Initial Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
  * Based on code from Ubercart project.
  * Released under GPL.
@@ -153,6 +153,29 @@ function uc_who_bought_what_attrib_list($nid){
 	}
   return $list;
 }
+
+
+/****************
+* Sort table by values in $_GET
+*
+****************/
+
+function uc_who_bought_what_array_sort(&$table){
+  //Is there a GET set?
+  if($skey = $_GET['order']){
+	$skarray = array();
+	foreach($table as $val){
+	  $skarray[] =  strtolower($val[$skey]); //eliminate sort anomalies from case
+	}
+	$sdir = $_GET['sort'];
+   if( strcmp($sdir, 'desc')){
+     $order = SORT_DESC;
+   } else {
+     $order = SORT_ASC;
+   }
+     array_multisort($skarray, $order,  $table);
+  }
+}
  
 
 function uc_who_bought_what_report($nid=0) {
@@ -189,6 +212,7 @@ function uc_who_bought_what_report($nid=0) {
 	$vals = uc_who_bought_what_data($product_id, $csv);
 	
 	if(!$csv){ // regular output
+	  uc_who_bought_what_array_sort($vals['rows']);
 	  $output .= theme('table', array('header' => $vals['header'], 'rows' => $vals['rows'], 'sticky'=>1 ));
 	  $output .= l(t('Export ' . (sizeof($vals['rows'])) . ' rows to csv file'), "node/$product_id/buyers", array('query'=> array('csv'=> "TRUE")));
 
@@ -326,12 +350,28 @@ function uc_who_bought_what_menu() {
     'description' => 'View reports of users who purchased this product',
     'page callback' => 'uc_who_bought_what_report',
 	'page arguments' => array(1),
-    'access arguments' => array('view own who bought what'),
+	'access callback' => 'uc_who_bought_what_access_uc',
+    'access arguments' => array(1),
     'type' => MENU_LOCAL_TASK,
 	);
 
 	return $items;
 } // function uc_who_bought_what_menu
+
+
+function uc_who_bought_what_access_uc($nid){
+ $node = node_load($nid);
+ if(uc_product_is_product($node)){
+  global $user;
+  if($user->uid==1) return TRUE;
+  if(user_access('view all who bought what', $user)) return TRUE;
+  if($node->uid == $user->uid && user_access('view own who bought what', $user)) return TRUE;
+
+  }
+  return FALSE; 
+}
+
+
 
 //Needed to make it appear in admin menu. Not sure why we need this in this file and not others, but it works
 
