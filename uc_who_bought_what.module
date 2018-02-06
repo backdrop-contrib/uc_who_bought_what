@@ -3,14 +3,14 @@
 
 
 /**
- * @uc_who_bought_what.module (dev 27/May/11)
+ * @uc_who_bought_what.module (dev 6 feb 2018)
  *
  * Displays a list of customers who have purchased a particular product in Ubercart.
  *
  * Adds an additional menu item to the Ubercart Reports, that lists the customers
  * who purchased certain products.  And totals, and show all records
  *
- * Copyright 2011 Michael Moradzadeh Cayenne.SF@gmail.com
+ * Copyright 2018 Michael Moradzadeh Cayenne.SF@gmail.com
  * Initial Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
  * Based on code from Ubercart project.
  * Released under GPL.
@@ -174,7 +174,7 @@ function uc_who_bought_what_array_sort(&$table){
   if(isset($_GET['order']) && $skey = $_GET['order']){
 	$skarray = array();
 	foreach($table as $val){
-	  $skarray[] =  strtolower($val[$skey]); //eliminate sort anomalies from case
+	  $skarray[] =  strip_tags(strtolower($val[$skey])); //eliminate sort anomalies from case
 	}
 	$sdir = $_GET['sort'];
    if( strcmp($sdir, 'desc')){
