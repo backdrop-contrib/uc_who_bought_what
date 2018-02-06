@@ -10,7 +10,7 @@
  * Adds an additional menu item to the Ubercart Reports, that lists the customers
  * who purchased certain products.  And totals, and show all records
  *
- * Copyright 2011-2015 Michael Moradzadeh Cayenne.SF@gmail.com
+ * Copyright 2011 Michael Moradzadeh Cayenne.SF@gmail.com
  * Initial Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
  * Based on code from Ubercart project.
  * Released under GPL.
@@ -25,10 +25,12 @@
 function uc_who_bought_what_data($pid, $csv=false){
   	// check for the redeem module
 	
-	if(module_exists('redeem') && redeem_is_redeemable($pid)){
+	if(module_exists('redeem') ){
 	  $redeem = TRUE;
+	 
 	} else {
 	  $redeem = FALSE;
+	  
 	}
 	
 	
@@ -40,7 +42,7 @@ function uc_who_bought_what_data($pid, $csv=false){
 		array('data' => t('Email'), 'field' => 'email', 'sql_field' => "{uc_orders}.primary_email"),
 		array('data' => t('Phone'), 'field' => 'phone', 'sql_field' => "{uc_orders}.billing_phone"),
 		array('data' => t('Price'), 'field' => 'price', 'sql_field' => "{uc_order_products}.price"),
-		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "(uc_order_products}.price * {uc_order_products}.qty)"),
+		array('data' => t('Total'), 'field' => 'total', 'sql_field' => "({uc_order_products}}.price * {uc_order_products}.qty)"),
 		array('data' => t('Date'),  'field' => 'date',  'sql_field' => "{uc_orders}.created"),
 		array('data' => t('HowPay'),'field' => 'howpay','sql_field' => "{uc_orders}.payment_method"),
 		array('data' => t('Status'),'field' => 'status','sql_field' => "{uc_orders}.order_status"),
@@ -61,10 +63,12 @@ function uc_who_bought_what_data($pid, $csv=false){
 	 $selects[] = "{uc_orders}.uid AS uid ";
 	 
 	 if($csv){
+	   $selects[] = "{uc_order_products}.order_product_id AS line_id";
 	   $selects[] = "uccb.country_name AS bill_country";
 	   $selects[] = "uccs.country_name AS ship_country";
 	   $selects[] = "uccbz.zone_code AS bill_zone";
 	   $selects[] = "uccsz.zone_code AS ship_zone";
+	   
 	 }
 	 $sqsel = implode(',', $selects);
      
@@ -101,10 +105,15 @@ function uc_who_bought_what_data($pid, $csv=false){
 	  $attr = FALSE;
 	}
 	if($csv){ //add csv files
-		$csv_xtra = array('delivery_first_name', 'delivery_last_name', 'delivery_phone', 'delivery_company', 'delivery_street1', 'delivery_street2', 'delivery_city', 'ship_zone', 'delivery_postal_code', 'ship_country', 'billing_first_name', 'billing_last_name', 'billing_phone', 'billing_company', 'billing_street1', 'billing_street2', 'billing_city', 'bill_zone', 'billing_postal_code', 'bill_country');
+		$csv_xtra = array('delivery_first_name', 'delivery_last_name',
+		 'delivery_phone', 'delivery_company', 'delivery_street1', 'delivery_street2', 'delivery_city', 
+		 'ship_zone', 'delivery_postal_code', 'ship_country', 'billing_first_name', 'billing_last_name',
+		  'billing_phone', 'billing_company', 'billing_street1', 'billing_street2', 'billing_city', 'bill_zone', 
+		  'billing_postal_code', 'bill_country');
 		foreach($csv_xtra as $newhead){
 			$header[] = array('data' =>$newhead, 'field'=> $newhead);
 		}
+	
 	}
 
 	 $emails = array();
@@ -162,7 +171,7 @@ function uc_who_bought_what_attrib_list($nid){
 
 function uc_who_bought_what_array_sort(&$table){
   //Is there a GET set?
-  if($skey = $_GET['order']){
+  if(isset($_GET['order']) && $skey = $_GET['order']){
 	$skarray = array();
 	foreach($table as $val){
 	  $skarray[] =  strtolower($val[$skey]); //eliminate sort anomalies from case
@@ -200,7 +209,7 @@ function uc_who_bought_what_report($nid=0) {
 	  return drupal_access_denied();
 		}
 
-		$tql =	"SELECT COUNT(uc_order_products.qty) AS ordcount, SUM(uc_order_products.qty) AS grandtotal FROM {uc_order_products}" .
+		$tql =	"SELECT COUNT({uc_order_products}.qty) AS ordcount, SUM({uc_order_products}.qty) AS grandtotal FROM {uc_order_products}" .
 		" JOIN {uc_orders} ON {uc_order_products}.order_id = {uc_orders}.order_id " . 
 		" AND {uc_order_products}.nid  =  :product_id  WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' " ;
 

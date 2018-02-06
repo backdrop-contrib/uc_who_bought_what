@@ -19,3 +19,10 @@ core = "7.x"
 project = "uc_who_bought_what"
 datestamp = "1412782049"
 
+
+; Information added by Drupal.org packaging script on 2015-05-16
+version = "7.x-1.1+5-dev"
+core = "7.x"
+project = "uc_who_bought_what"
+datestamp = "1431746582"
+
