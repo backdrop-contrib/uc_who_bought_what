@@ -31,15 +31,12 @@ function uc_who_bought_what_data($pid, $csv = false) {
 
   if (module_exists('redeem') ) {
     $redeem = TRUE;
-
   }
   else {
     $redeem = FALSE;
-
   }
 
-
-  $header = array(//thanks to blackice78 for this code fix
+  $header = array( //thanks to blackice78 for this code fix
     array(
       'data' => t('Qty'),
       'field' => 'qty',
@@ -303,7 +300,6 @@ function uc_who_bought_what_report($nid = 0) {
     global $user;
     $output = "";
     if (!user_access('view all who bought what') && !(user_access('view own who bought what') && $node->uid == $user->uid) ) {
-
       backdrop_set_message('You are not authorized to view who bought that item.  Please contact your site or shop administrator', 'warning');
       return backdrop_access_denied();
     }
@@ -318,7 +314,6 @@ function uc_who_bought_what_report($nid = 0) {
       $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . " ($tresult->grandtotal sold in $tresult->ordcount orders)</h3>";
     }
     $vals = uc_who_bought_what_data($product_id, $csv);
-
     if (!$csv) { // regular output
       uc_who_bought_what_array_sort($vals['rows']);
       $output .= theme('table', array('header' => $vals['header'], 'rows' => $vals['rows'], 'sticky' => 1));
@@ -326,7 +321,6 @@ function uc_who_bought_what_report($nid = 0) {
 
       $output .= '<div class="email-addresses"><h4>Email Addresses</h4><label for="email-addresses-textarea"
    	    value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode('; ', $vals['emails']) . '</textarea></div>';
-
       return $output;
     }
     else { //csv output
@@ -340,7 +334,6 @@ function uc_who_bought_what_report($nid = 0) {
       $output = fopen('php://output', 'w');
       // output the column headings
       fputcsv($output, $csvheads);
-
       // loop over the rows, outputting them
       foreach ($vals['rows'] as $row) {
         fputcsv($output, $row);

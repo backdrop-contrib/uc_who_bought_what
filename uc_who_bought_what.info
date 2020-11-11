@@ -1,11 +1,7 @@
-; $Id: 
-name = Who Bought What
-description = A shows a list of users who purchased a selected product
+name = Ubercart: Who Bought What
+description = A shows a list of users who purchased a selected product.
 backdrop = 1.x
 type = module
 package = "Ubercart - extra"
 
-
-
-
-
+dependencies[] = ubercart
