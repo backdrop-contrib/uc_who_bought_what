@@ -1,25 +1,23 @@
 <?php
 // $Id:
 
-
 /**
- * @uc_who_bought_what.module (dev 6 feb 2018)
+ * @uc_who_bought_what.module
  *
  * Displays a list of customers who have purchased a particular product in Ubercart.
  *
  * Adds an additional menu item to the Ubercart Reports, that lists the customers
- * who purchased certain products.  And totals, and show all records
+ * who purchased certain products.  And totals, and show all records.
  *
  * Copyright 2018 Michael Moradzadeh Cayenne.SF@gmail.com
- * Initial Backdrop 7.2 Migration Chris Amendola mrfreshly@gmail.com
+ * Initial Drupal 7.2 Migration Chris Amendola mrfreshly@gmail.com
+ * Ported to Backdrop by Laryn Kragt Bakker, https://cedc.org
  * Based on code from Ubercart project.
  * Released under GPL.
  */
 
 /************
- *
- * Get an array of data and an array of headers
- *
+ * Get an array of data and an array of headers.
  *************/
 
 /**
@@ -27,8 +25,7 @@
  * @see http://drupal.org/node/1354
  */
 function uc_who_bought_what_data($pid, $csv = false) {
-  // check for the redeem module
-
+  // Check for the redeem module.
   if (module_exists('redeem') ) {
     $redeem = TRUE;
   }
@@ -75,7 +72,7 @@ function uc_who_bought_what_data($pid, $csv = false) {
     array(
       'data' => t('Total'),
       'field' => 'total',
-      'sql_field' => "({uc_order_products}}.price * {uc_order_products}.qty)",
+      'sql_field' => "({uc_order_products}.price * {uc_order_products}.qty)",
     ),
     array(
       'data' => t('Date'),
@@ -105,10 +102,10 @@ function uc_who_bought_what_data($pid, $csv = false) {
   );
 
   if (!$redeem) {
-    unset($header[1]); // if not using redeem module, don't need this column.
+    unset($header[1]); // If not using redeem module, we don't need this column.
   }
 
-  //We are ready to collect the data
+  // We are ready to collect the data.
   $rows = array();
 
   $selects = array();
@@ -116,7 +113,7 @@ function uc_who_bought_what_data($pid, $csv = false) {
     $selects[] = "{$item['sql_field']} AS {$item['field']}";
   }
   $selects[] = "{uc_order_products}.data AS opdata"; // get the line item data
-  $selects[] = "{uc_orders}.uid AS uid ";
+  $selects[] = "{uc_orders}.uid AS uid";
 
   if ($csv) {
     $selects[] = "{uc_order_products}.order_product_id AS line_id";
@@ -126,13 +123,14 @@ function uc_who_bought_what_data($pid, $csv = false) {
     $selects[] = "uccsz.zone_code AS ship_zone";
 
   }
-  $sqsel = implode(',', $selects);
+  $sqsel = implode(', ', $selects);
 
-  //if($redeem) $sqsel .= ', redcount ';
+  if($redeem) $sqsel .= ', redcount ';
 
-  $sqsel .=   ", {uc_orders}.*, {uc_order_products}.data AS orderdata "; // this is to collect the raw attribute data and also not to have a comma at the end
+  // Collect the raw attribute data and also make sure not to have a comma at the end.
+  $sqsel .=   ", {uc_orders}.*, {uc_order_products}.data AS orderdata ";
 
-  $sql = "SELECT  $sqsel FROM {uc_orders} " .
+  $sql = "SELECT $sqsel FROM {uc_orders} " .
 	  		 " JOIN {uc_order_products}" .
 			 " ON {uc_order_products}.order_id = {uc_orders}.order_id " .
 			 " AND {uc_order_products}.nid  =  :product_id " .
@@ -147,24 +145,25 @@ function uc_who_bought_what_data($pid, $csv = false) {
   $sql .= " WHERE order_status <> 'in_checkout' AND order_status <> 'canceled' AND order_status <> 'abandoned' ";
   $customers = db_query($sql, array(":product_id" => $pid));
 
-  if (module_exists('uc_attribute')) { //Attributes are very popular
-    //Set a flag
+  if (module_exists('uc_attribute')) {
+    // Set a flag.
     $attr = TRUE;
-    // get the header values
+    // Get the header values.
     $attrheads = uc_who_bought_what_attrib_list($pid);
 
     foreach ($attrheads as $ahead => $order) {
-
+      // Add the attributes in set order.
       $header[] = array(
         'data' => $ahead,
         'field' => $ahead,
-      ); // add the attributes in set order
+      );
     }
   }
   else {
     $attr = FALSE;
   }
-  if ($csv) { //add csv files
+  if ($csv) {
+    // Add csv files.
     $csv_xtra = array(
       'delivery_first_name',
       'delivery_last_name',
@@ -199,7 +198,8 @@ function uc_who_bought_what_data($pid, $csv = false) {
   $emails = array();
   while ($row = $customers->fetchAssoc()) {
 
-    if ($attr) { // need to deserialize the attribs
+    if ($attr) {
+      // Need to deserialize the attribs.
       $data = unserialize($row['orderdata']);
 
       foreach ($data['attributes'] as $label => $atr) {
@@ -210,7 +210,7 @@ function uc_who_bought_what_data($pid, $csv = false) {
     foreach ($header as $head) {
       $trow[$head['data']] = isset($row[$head['field']]) ? $row[$head['field']] : null;
     }
-    // now some special cleanups
+    // Now some special cleanups.
     $trow['Date'] = strftime('%Y.%m.%d', $trow['Date']);
     $trow['Price'] = number_format($trow['Price'], 2);
     $trow['Total'] = number_format($trow['Total'], 2);
@@ -243,7 +243,8 @@ function uc_who_bought_what_attrib_list($nid) {
   $list = array();
   while ($attr = $result->fetchAssoc()) {
     if ($attr['label'] == '<none>' || $attr['label'] == '') {
-      $attr['label'] = $attr['name']; // use the field name for blanks
+      // Use the field name for blanks.
+      $attr['label'] = $attr['name'];
     }
     $list[$attr['label']] = $attr['ordering'];
   }
@@ -253,7 +254,6 @@ function uc_who_bought_what_attrib_list($nid) {
 
 /****************
  * Sort table by values in $_GET
- *
  ****************/
 
 /**
@@ -261,11 +261,12 @@ function uc_who_bought_what_attrib_list($nid) {
  * @see http://drupal.org/node/1354
  */
 function uc_who_bought_what_array_sort(&$table) {
-  //Is there a GET set?
+  // Is there a GET set?
   if (isset($_GET['order']) && $skey = $_GET['order']) {
     $skarray = array();
     foreach ($table as $val) {
-      $skarray[] =  strip_tags(strtolower($val[$skey])); //eliminate sort anomalies from case
+      // Eliminate sort anomalies from case.
+      $skarray[] =  strip_tags(strtolower($val[$skey]));
     }
     $sdir = $_GET['sort'];
     if ( strcmp($sdir, 'desc')) {
@@ -287,8 +288,9 @@ function uc_who_bought_what_report($nid = 0) {
 
   $product_id = (isset($_GET['pid'])) ? intval($_GET['pid']) : $nid;
 
-  $csv = (isset($_GET['csv'])) ? TRUE : FALSE; //branch, depending on whether this is or is not a call for a .csv file
-  // if a node was specified, it better be one you can look at!
+  // Branch, depending on whether this is or is not a call for a .csv file.
+  $csv = (isset($_GET['csv'])) ? TRUE : FALSE;
+  // If a node was specified, it better be one you can look at!
 
   if ($product_id <= 0) {
     return backdrop_get_form('uc_who_bought_what_form');
@@ -314,7 +316,8 @@ function uc_who_bought_what_report($nid = 0) {
       $output .= '<h3>' . l($node->title, 'node/' . $node->nid) . " ($tresult->grandtotal sold in $tresult->ordcount orders)</h3>";
     }
     $vals = uc_who_bought_what_data($product_id, $csv);
-    if (!$csv) { // regular output
+    if (!$csv) {
+      // Regular output.
       uc_who_bought_what_array_sort($vals['rows']);
       $output .= theme('table', array('header' => $vals['header'], 'rows' => $vals['rows'], 'sticky' => 1));
       $output .= l(t('Export ' . (sizeof($vals['rows'])) . ' rows to csv file'), "node/$product_id/buyers", array('query' => array('csv' => "TRUE")));
@@ -323,18 +326,19 @@ function uc_who_bought_what_report($nid = 0) {
    	    value="Email addresses:" /><textarea id="email-addresses-textarea" rows="5" cols="100">' . implode('; ', $vals['emails']) . '</textarea></div>';
       return $output;
     }
-    else { //csv output
+    else {
+      // CSV output.
       $csvheads = array();
       foreach ($vals['header'] as $head) {
         $csvheads[] = $head['data'];
       }
       backdrop_add_http_header('Content-Type', 'text/csv');
       backdrop_add_http_header('Content-Disposition', 'attachment; filename=' . 'who_bought_' . convert_to_filename($node->title) . '.csv');
-      // create a file pointer connected to the output stream
+      // Create a file pointer connected to the output stream.
       $output = fopen('php://output', 'w');
       // output the column headings
       fputcsv($output, $csvheads);
-      // loop over the rows, outputting them
+      // Loop over the rows, outputting them.
       foreach ($vals['rows'] as $row) {
         fputcsv($output, $row);
       }
@@ -344,7 +348,7 @@ function uc_who_bought_what_report($nid = 0) {
 
   }
 
-} // function uc_who_bought_what_report
+}
 
 
 
@@ -368,7 +372,8 @@ function uc_who_bought_what_form($form, $form_state) {
   //		WHERE status = status";
 
   if (user_access('view all who bought what')) {
-    $listquery .= ''; // do nothing. see all
+    // Do nothing. see all.
+    $listquery .= '';
   }
   else {
     if (user_access('view own who bought what')) {
@@ -407,9 +412,7 @@ function uc_who_bought_what_form($form, $form_state) {
 
   return $form;
 
-} // function uc_who_bought_what_form
-
-
+}
 
 /**
  * @todo Please document this function.
@@ -419,8 +422,7 @@ function uc_who_bought_what_form_validate($form, $form_values) {
   if ($form_values['values']['product_select'] == '0') {
     form_set_error('product_select', t('You must select a product.'));
   }
-} // function uc_who_bought_what_validate
-
+}
 
 /**
  * @todo Please document this function.
@@ -428,14 +430,11 @@ function uc_who_bought_what_form_validate($form, $form_values) {
  */
 function uc_who_bought_what_form_submit($form, $form_values) {
   backdrop_goto("admin/store/reports/uc_who_bought_what", array('query' => array('pid' => $form_values['values']['product_select'])));
-} // function uc_who_bought_what_form_submit
-
-
+}
 
 /*******************************************************************************
  * Module and Helper Functions
  ******************************************************************************/
-
 
 /**
  * Valid permissions for this module
@@ -458,7 +457,6 @@ function uc_who_bought_what_permission() {
     ),
   );
 }
-
 
 /**
  * @todo Please document this function.
@@ -487,8 +485,7 @@ function uc_who_bought_what_menu() {
   );
 
   return $items;
-} // function uc_who_bought_what_menu
-
+}
 
 /**
  * @todo Please document this function.
@@ -512,10 +509,7 @@ function uc_who_bought_what_access_uc($nid) {
   return FALSE;
 }
 
-
-
-//Needed to make it appear in admin menu. Not sure why we need this in this file and not others, but it works
-
+// Needed to make it appear in admin menu. Not sure why we need this in this file and not others, but it works.
 /**
  * @todo Please document this function.
  * @see http://drupal.org/node/1354
@@ -527,7 +521,6 @@ function uc_who_bought_what_admin_paths() {
   return $paths;
 }
 
-
 /**
  * Converts a string to a valid UNIX filename.
  * @param $string The filename to be converted
@@ -535,22 +528,21 @@ function uc_who_bought_what_admin_paths() {
  */
 function convert_to_filename($string) {
 
-  // Replace spaces with underscores and makes the string lowercase
+  // Replace spaces with underscores and makes the string lowercase.
   $string = str_replace(" ", "_", $string);
 
   $string = str_replace("..", ".", $string);
   $string = strtolower($string);
 
-  // Match any character that is not in our whitelist
+  // Match any character that is not in our whitelist.
   preg_match_all("/[^0-9^a-z^_^.]/", $string, $matches);
 
-  // Loop through the matches with foreach
+  // Loop through the matches with foreach.
   foreach ($matches[0] as $value) {
     $string = str_replace($value, "", $string);
   }
   return $string;
 }
-
 
 /**
  * Display help and module information
@@ -566,5 +558,5 @@ function uc_who_bought_what_help($path, $arg) {
       break;
   }
   return $output;
-} // function uc_who_bought_what_help
+}
 ?>
