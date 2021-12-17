@@ -343,7 +343,7 @@ function uc_who_bought_what_report($nid = 0) {
         fputcsv($output, $row);
       }
 
-      return;
+      backdrop_exit();
     }
 
   }
@@ -473,7 +473,6 @@ function uc_who_bought_what_menu() {
     'access arguments' => array('view own who bought what'),
     'type' => MENU_NORMAL_ITEM,
   );
-
   $items['node/%/buyers'] = array(
     'title' => 'Who Bought',
     'description' => 'View reports of users who purchased this product',
@@ -481,6 +480,16 @@ function uc_who_bought_what_menu() {
     'page arguments' => array(1),
     'access callback' => 'uc_who_bought_what_access_uc',
     'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items['node/%/buyers/export'] = array(
+    'title' => 'Who Bought',
+    'description' => 'View reports of users who purchased this product',
+    'page callback' => 'uc_who_bought_what_report_export',
+    'page arguments' => array(1),
+    'access callback' => 'uc_who_bought_what_access_uc',
+    'access arguments' => array(1),
+    'delivery callback' => 'backdrop_json_deliver',
     'type' => MENU_LOCAL_TASK,
   );
 
